@@ -1,0 +1,51 @@
+import pandas as pd
+import spacy        
+nlp = spacy.load('en_core_web_sm', parser=False, entity=False)
+npr = pd.read_excel('Review.xlsx')
+
+npr['rev']=npr['Review']
+npr['Review'] = npr.Review.str.replace("[^\w\s]", "")
+npr['Review']=npr['Review'].str.lower() 
+npr = npr[npr['Review'].notnull()]
+
+stopwords=pd.read_csv('stop words.csv')
+customize_stop_words=stopwords['stop_words'].to_list()
+
+for w in customize_stop_words:
+    nlp.vocab[w].is_stop = True
+    nlp.Defaults.stop_words.add(w)
+
+new_words=nlp.Defaults.stop_words
+n=list(new_words)
+npr['Review'] = npr['Review'].apply(lambda x: ' '.join([item for item in x.split() if item not in n]))
+
+from sklearn.feature_extraction.text import CountVectorizer
+cv = CountVectorizer(max_df=0.99, min_df=1, stop_words='english')
+dtm = cv.fit_transform(npr['Review'].values.astype('U'))
+
+
+from sklearn.decomposition import LatentDirichletAllocation
+LDA = LatentDirichletAllocation(n_components=7,random_state=42)
+LDA.fit(dtm)
+
+LDA.components_
+
+for index,topic in enumerate(LDA.components_):
+    print(f'THE TOP 10 WORDS FOR TOPIC #{index}')
+    print([cv.get_feature_names()[i] for i in topic.argsort()[-10:]])
+    print('\n')
+
+
+topic_results = LDA.transform(dtm)
+npr['Topic'] = topic_results.argmax(axis=1)
+
+my_dict={0:'Pets/ Food/ Skin Care',1:'Books',2:'Music',3:'Toys/ Kid Products/ Plastic Items',4:'PC, PS Games/ Software/ CD, DVD',5:'Electronic Items',6:'Movie/ TV Series/ Fiction Novels/ Comics'}
+npr['Label']=npr['Topic'].map(my_dict)
+npr.head(10)
+
+
+npr.groupby('Label').count()[['Review']].sort_values(by=['Review'],ascending=False)
+
+
+New=npr[['rev','Label']]
+New.to_csv('output.csv',index=False)
