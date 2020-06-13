@@ -1,0 +1,49 @@
+def optimize_nmf(self, df):
+        '''
+        Function to optimize the number of topics used in NMF clustering.
+
+        INPUT:
+            df: pandas Dataframe containing 'lemmatized_text' column for TF-IDF
+        '''
+        self.fit_tfidf(df)
+        if not self.optimum_topics:
+            avg_cosine_sim = []
+            pbar = ProgressBar()
+            for i in pbar(self.num_topics):
+                cosine_sim = []
+                self.nmf = NMF(n_components=i,
+                        alpha=self.nmf_alpha,
+                        l1_ratio=self.nmf_l1_ratio,
+                        random_state=self.random_state).fit(self.tfidf_matrix)
+                err = self.nmf.reconstruction_err_
+                self.H_matrix = self.nmf.components_
+                if i == 1:
+                    avg_cosine_sim.append(1)
+                else:
+                    idx_arr = np.arange(i)
+                    for combo in combinations(idx_arr, 2):
+                        vect_1 = self.H_matrix[:, int(combo[0])].reshape(-1, 1)
+                        vect_2 = self.H_matrix[:, int(combo[1])].reshape(-1, 1)
+                        sim = cosine_similarity(vect_1, vect_2)
+                        cosine_sim.append(sim)
+                    avg_cosine_sim.append(np.mean(cosine_sim))
+                self.reconstruction_err_array.append(err)
+            fig = plt.figure(figsize=(16, 8))
+            ax_1 = fig.add_subplot(211)
+            ax_1.plot(self.num_topics, self.reconstruction_err_array)
+            ax_1.set_title("Reconstruction Error vs Number of Topics")
+            ax_1.set_xlabel("Number of Topics")
+            ax_1.set_ylabel("Reconstruction Error")
+            ax_2 = fig.add_subplot(212)
+            ax_2.plot(self.num_topics, avg_cosine_sim)
+            ax_2.set_title("Avg Cosine Similarity Between Topics")
+            ax_2.set_xlabel("Number of Topics")
+            ax_2.set_ylabel("Avg Cosine Similarity")
+            plt.tight_layout()
+            if self.pro_or_con == 'pro':
+                img_path = os.path.join('images', 'positive')
+            else:
+                img_path = os.path.join('images', 'negative')
+            plt.savefig(os.path.join(img_path, "nmf_metrics.png"))
+            plt.show()
+            self.optimum_topics = int(raw_input("Desired topics from graph: ")) 
